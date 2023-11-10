@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -21,11 +24,43 @@ type requestline struct {
 }
 
 const (
-	countWorker     = 40
-	msecondduration = 1000
+// cpucount                  = 4
+// countWorker               = 10
+// maxprocessurldurationmsec = 1000
+// maxtotaldurationsecond    = 60 * 10 * time.Second
 )
 
 func main() {
+	//to do
+	//flags
+	//log
+	//gracefull shotdown
+	//refactoring
+	//make
+	//test
+	//github actions
+	//pprof
+	//README
+
+	// flags
+	cpucount := *flag.Int("cpucount", 2, "cpu count")
+	countWorker := *flag.Int("countWorker", 10, "workers count")
+	maxprocessurldurationmsec := *flag.Int("maxprocessurldurationmsec", 1000, "maximum duration get url request,msec")
+	maxtotaldurationsecond := *flag.Int("maxtotaldurationsecond ", 60*10, "maximum total duration,second")
+	//set NumCPU
+	cpuCountSys := runtime.NumCPU()
+	if cpucount >= cpuCountSys {
+		runtime.GOMAXPROCS(cpuCountSys - 1)
+	}
+	if cpucount < cpuCountSys {
+		runtime.GOMAXPROCS(cpucount)
+	}
+	start := time.Now()
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(maxtotaldurationsecond)*time.Second)
+	defer cancelFunc()
+	defer func(start time.Time) {
+		fmt.Printf("total processing time,msec: %d\n", time.Now().Sub(start).Milliseconds())
+	}(start)
 	// first open the file
 	file, err := os.Open("./source/testurl.txt")
 	if err != nil {
@@ -37,17 +72,24 @@ func main() {
 	out := make(chan requestline, countWorker)
 	var wg sync.WaitGroup
 	for i := 0; i < countWorker; i++ {
-		go createrequestworker(msecondduration, &wg, in, out)
+		go createrequestworker(int64(maxprocessurldurationmsec), &wg, in, out)
 	}
 	//output result
 	go func(out chan requestline) {
 		for v := range out {
-			fmt.Printf("%d/n", v.Size)
+			if v.Err == nil {
+				fmt.Printf("line source:%d,url:%s,content size,kB:%0.1f,processing time,msec: %d\n", v.Nline, v.Url, float64(v.Size)/1024.0, v.Readtime.Milliseconds())
+			}
+			if v.Err != nil {
+				fmt.Printf("line source:%d,url:%s,error:%s\n", v.Nline, v.Url, v.Err)
+			}
 		}
 	}(out)
 	//
 	reader := bufio.NewReader(file)
 	counter := int64(1)
+	var ctxresult string = "done"
+l:
 	for {
 		line, err := read(reader)
 		if err != nil {
@@ -62,12 +104,20 @@ func main() {
 		}
 		in <- v
 		counter++
+		select {
+		case <-ctx.Done():
+			{
+				ctxresult = "context timeout exceeded"
+				break l
+			}
+		default:
+		}
 		// fmt.Println(string(line))
 	}
 	close(in)
 	wg.Wait()
 	close(out)
-	log.Println("Done")
+	log.Println(ctxresult)
 }
 
 // Read with Readline function
@@ -87,7 +137,7 @@ func read(r *bufio.Reader) ([]byte, error) {
 	return ln, err
 }
 
-//validate url
+// validate url
 func validate(url string) error {
 	return nil
 }
@@ -113,7 +163,7 @@ func urlget(c http.Client, v requestline) requestline {
 	start := time.Now()
 	resp, err := c.Get(v.Url)
 	v.Readtime = time.Now().Sub(start)
-	defer resp.Body.Close()
+	// defer resp.Body.Close()
 	if err != nil {
 		v.Err = fmt.Errorf("request get error:%w", err)
 		return v
@@ -123,6 +173,7 @@ func urlget(c http.Client, v requestline) requestline {
 	if err != nil {
 		v.Err = fmt.Errorf("body read error:%w", err)
 	}
+	resp.Body.Close()
 	return v
 }
 func bodysize(r io.Reader) (int64, error) {
