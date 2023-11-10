@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"golang.org/x/exp/slog"
 )
 
 type requestline struct {
@@ -41,7 +43,9 @@ func main() {
 	//github actions
 	//pprof
 	//README
-
+	//log
+	jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{}) // 👈
+	logger := slog.New(jsonHandler)
 	// flags
 	cpucount := *flag.Int("cpucount", 2, "cpu count")
 	countWorker := *flag.Int("countWorker", 10, "workers count")
@@ -59,7 +63,7 @@ func main() {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Duration(maxtotaldurationsecond)*time.Second)
 	defer cancelFunc()
 	defer func(start time.Time) {
-		fmt.Printf("total processing time,msec: %d\n", time.Now().Sub(start).Milliseconds())
+		fmt.Printf("total processing time,msec: %d\n", time.Since(start).Milliseconds())
 	}(start)
 	// first open the file
 	file, err := os.Open("./source/testurl.txt")
@@ -81,6 +85,7 @@ func main() {
 				fmt.Printf("line source:%d,url:%s,content size,kB:%0.1f,processing time,msec: %d\n", v.Nline, v.Url, float64(v.Size)/1024.0, v.Readtime.Milliseconds())
 			}
 			if v.Err != nil {
+				logger.Error(v.Err.Error())
 				fmt.Printf("line source:%d,url:%s,error:%s\n", v.Nline, v.Url, v.Err)
 			}
 		}
@@ -117,7 +122,7 @@ l:
 	close(in)
 	wg.Wait()
 	close(out)
-	log.Println(ctxresult)
+	fmt.Println(ctxresult)
 }
 
 // Read with Readline function
@@ -162,7 +167,7 @@ func urlget(c http.Client, v requestline) requestline {
 	//request
 	start := time.Now()
 	resp, err := c.Get(v.Url)
-	v.Readtime = time.Now().Sub(start)
+	v.Readtime = time.Since(start)
 	// defer resp.Body.Close()
 	if err != nil {
 		v.Err = fmt.Errorf("request get error:%w", err)
