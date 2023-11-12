@@ -17,7 +17,10 @@ func TestRequesturlusecase(t *testing.T) {
 	input := "expected"
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// Send response to be tested
-		rw.Write([]byte(input))
+		_, err := rw.Write([]byte(input))
+		if err != nil {
+			t.Fail()
+		}
 	}))
 	defer s.Close()
 
@@ -35,16 +38,16 @@ func TestRequesturlusecase(t *testing.T) {
 }
 
 func TestInvalidURL(t *testing.T) {
-    requesturl := Newrequesturlusecase()
+	requesturl := Newrequesturlusecase()
 	c := http.Client{Timeout: 50 * time.Millisecond}
 	v := model.Requestline{
 		Nline: 1,
 		Url:   "ht&@-tp://:aa",
 	}
-    ctx := context.Background()
+	ctx := context.Background()
 	actual := requesturl.Get(ctx, c, v)
-    assert.Error(t, actual.Err )
-    assert.Equal(t, int64(0), actual.Size, "equal size body")
+	assert.Error(t, actual.Err)
+	assert.Equal(t, int64(0), actual.Size, "equal size body")
 }
 func TestTimeout(t *testing.T) {
 	requesturl := Newrequesturlusecase()
@@ -52,7 +55,10 @@ func TestTimeout(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		// Send response to be tested
 		time.Sleep(50 * time.Millisecond)
-		rw.Write([]byte(input))
+		_, err := rw.Write([]byte(input))
+		if err != nil {
+			t.Fail()
+		}
 	}))
 	defer s.Close()
 
@@ -64,15 +70,15 @@ func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	actual := requesturl.Get(ctx, c, v)
 	assert.Error(t, actual.Err)
-    assert.Equal(t, int64(0), actual.Size, "equal size body")
+	assert.Equal(t, int64(0), actual.Size, "equal size body")
 }
 func TestBodyReadError(t *testing.T) {
 	requesturl := Newrequesturlusecase()
-    s := httptest.NewServer(
-        http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-            w.Header().Set("Content-Length", "1")
-        }),
-    )
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Length", "1")
+		}),
+	)
 	defer s.Close()
 
 	c := http.Client{Timeout: 30 * time.Millisecond}
@@ -83,5 +89,5 @@ func TestBodyReadError(t *testing.T) {
 	ctx := context.Background()
 	actual := requesturl.Get(ctx, c, v)
 	assert.Error(t, actual.Err)
-    assert.Equal(t, int64(0), actual.Size, "equal size body")
+	assert.Equal(t, int64(0), actual.Size, "equal size body")
 }
