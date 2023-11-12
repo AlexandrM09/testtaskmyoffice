@@ -32,18 +32,18 @@ func NewRequesturltransport(countWorker int, maxprocessurldurationmsec int, requ
 		wg:                        &sync.WaitGroup{},
 	}
 }
-func (r *Requesturltransport) Run(ctx context.Context) (in,out chan model.Requestline) {
+func (r *Requesturltransport) Run(ctx context.Context) (in, out chan model.Requestline) {
 	for i := 0; i < r.countWorker; i++ {
-		go func() {
+		r.wg.Add(1)
+		go func(wg *sync.WaitGroup) {
 			c := http.Client{Timeout: time.Duration(r.maxprocessurldurationmsec) * time.Millisecond}
-			r.wg.Add(1)
 			for v := range r.in {
 				r.out <- r.requesturl.Get(ctx, c, v)
 			}
-			r.wg.Done()
-		}()
+			wg.Done()
+		}(r.wg)
 	}
-	return r.in,r.out
+	return r.in, r.out
 }
 func (r *Requesturltransport) Stop() {
 	close(r.in)

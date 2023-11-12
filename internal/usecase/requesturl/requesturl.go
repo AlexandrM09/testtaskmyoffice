@@ -49,13 +49,14 @@ func bodysize(r io.Reader) (int64, error) {
 	var size int64
 	for {
 		read, err := r.Read(bytes)
+		size += int64(read)
 		if err == io.EOF {
+			// size += int64(read)
 			break
 		}
 		if err != nil {
 			return 0, err
 		}
-		size += int64(read)
 	}
 	return size, nil
 }

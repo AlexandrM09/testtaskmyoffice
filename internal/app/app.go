@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	model "github.com/AlexandrM09/testtaskmyoffice/internal/model"
@@ -37,6 +38,7 @@ type App struct {
 	successfullcount int
 	errorcount       int
 	reasonexit       string
+	mu               *sync.Mutex
 }
 
 func NewApp(flagconfig Appconfig) *App {
@@ -48,6 +50,7 @@ func NewApp(flagconfig Appconfig) *App {
 		logger:     slog.New(jsonHandler),
 		flagconfig: flagconfig,
 		requesturl: requesturl,
+		mu:         &sync.Mutex{},
 	}
 }
 
@@ -67,6 +70,8 @@ func (a *App) Run() {
 	defer cancelFunc()
 	//result string
 	defer func(start time.Time) {
+	 	a.mu.Lock()
+	    defer a.mu.Unlock()
 		fmt.Printf("total processing time,msec: %d,count of successfully processed urls: %d,count of urls processed with errors: %d,reason exit: %s\n", time.Since(start).Milliseconds(), a.successfullcount, a.errorcount, a.reasonexit)
 	}(start)
 	// open source the file
@@ -78,6 +83,7 @@ func (a *App) Run() {
 	reader := bufio.NewReader(file)
 	//start processing
 	in, out := a.requesturl.Run(ctx)
+
 	//output result
 	go func(out chan model.Requestline) {
 		for v := range out {
@@ -91,6 +97,8 @@ func (a *App) Run() {
 
 // select output result
 func (a *App) selectoutputstr(v model.Requestline) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if v.Err == nil {
 		a.successfullcount++
 		return fmt.Sprintf("line source:%d,url:%s,content size,kB:%0.1f,processing time,msec: %d\n", v.Nline, v.Url, float64(v.Size)/1024.0, v.Readtime.Milliseconds())
