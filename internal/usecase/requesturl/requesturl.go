@@ -33,6 +33,11 @@ func (r *Requesturlusecase) Get(ctx context.Context, c http.Client, v model.Requ
 		v.Err = fmt.Errorf("request get error:%w", err)
 		return v
 	}
+	//Status not OK
+	if resp.StatusCode != http.StatusOK {
+		v.Err = fmt.Errorf("request status is not ok")
+		return v
+	}
 	var buf bytes.Buffer
 	v.Size, err = bodysize(io.TeeReader(resp.Body, &buf))
 	if err != nil {
